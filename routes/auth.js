@@ -118,9 +118,7 @@ router.get(
 );
 
 router.get("/spotify/callback", passport.authenticate("spotify", { failureRedirect: "/" }), (req, res) => {
-  const returnTo = req.session.returnTo || "/";
-  delete req.session.returnTo;
-  res.redirect(returnTo);
+  res.redirect("/nowPlayingSong");
 });
 
 export default router;
