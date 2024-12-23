@@ -33,7 +33,7 @@ router.get("/planToday", async (req, res) => {
 });
 
 router.get("/nowPlaying", async (req, res) => {
-  req.session.returnTo = req.originalUrl;
+  req.session.returnTo = "/nowPlaying";
   ensureAuthenticated(req, res, async () => {
     try {
       const db = await readDB();
@@ -51,7 +51,7 @@ router.get("/nowPlaying", async (req, res) => {
 });
 
 router.get("/nowPlayingSong", async (req, res) => {
-  req.session.returnTo = req.originalUrl;
+  req.session.returnTo = "/nowPlayingSong";
   ensureAuthenticated(req, res, async () => {
     try {
       const db = await readDB();
