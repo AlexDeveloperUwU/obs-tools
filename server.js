@@ -4,6 +4,9 @@ import path from "path";
 import { configDotenv } from "dotenv";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
+import session from "express-session";
+import passport from "passport";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -23,9 +26,24 @@ app.use(e.static(path.join(__dirname, "public")));
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
+//! Session and Passport configuration
+app.use(
+  session({
+    secret: process.env.KEY,
+    resave: false,
+    saveUninitialized: false,
+  })
+);
+app.use(passport.initialize());
+app.use(passport.session());
+
 //! Routes
-import * as pages from "./routes/pages.js";
-app.use("/", pages.router);
+import pagesRouter from "./routes/pages.js";
+import authRouter from "./routes/auth.js";
+import apiRouter from "./routes/api.js";
+app.use("/", pagesRouter);
+app.use("/auth", authRouter);
+app.use("/api", apiRouter);
 
 //! Initialize the server
 app.listen(PORT, () => {

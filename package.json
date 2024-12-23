@@ -1,8 +1,15 @@
 {
   "dependencies": {
+    "@types/lowdb": "^1.0.15",
+    "axios": "^1.7.9",
+    "better-sqlite3": "^11.7.0",
     "dotenv": "^16.4.7",
     "ejs": "^3.1.10",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "lowdb": "^7.0.1",
+    "passport": "^0.7.0",
+    "passport-spotify": "^2.0.0"
   },
   "name": "twitch-tools",
   "type": "module",

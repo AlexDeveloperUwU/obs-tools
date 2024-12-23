@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Now Playing</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'spotify-green': '#ffffff',
+            'dark-green': 'rgba(51, 51, 51, 0.4)', // Cambiado a un tono más oscuro y transparente
+            'green-300': '#ffffff', // Texto blanco
+            'green-900/30': '#4d4d4d',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @font-face {
+      font-family: "Agrandir";
+      src: local("Agrandir Regular"), local("Agrandir-Regular"),
+        url("/PPAgrandir-Regular.otf") format("opentype");
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    html {
+      font-family: "Agrandir", sans-serif;
+      color: #ffffff;
+    }
+
+    .player-shadow {
+      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15));
+    }
+
+    .fade-in {
+      animation: fadeIn 1s forwards;
+    }
+
+    .fade-out {
+      animation: fadeOut 1s forwards;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    @keyframes fadeOut {
+      from {
+        opacity: 1;
+      }
+
+      to {
+        opacity: 0;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="playerContainer" class="fixed top-4 right-4 flex flex-col gap-2 w-[280px] hidden">
+    <div class="bg-dark-green rounded-lg p-3 player-shadow">
+      <div class="flex gap-3 items-center justify-between">
+        <div class="flex flex-col justify-center min-w-0 flex-1 text-right">
+          <h1 id="songName" class="text-lg font-bold text-spotify-green leading-tight truncate overflow-hidden">
+            <span id="scrollingSongName"></span>
+          </h1>
+          <p id="artistName" class="text-sm text-green-300 opacity-90 truncate overflow-hidden">
+            <span id="scrollingArtistName"></span>
+          </p>
+        </div>
+        <div class="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden">
+          <img id="albumCover" src="" alt="Album Cover" class="w-full h-full object-cover">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentSongId = null;
+    let isPlaying = false;
+    let fadeOutTimeout;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      fetchNowPlaying(true);
+      setInterval(fetchNowPlaying, 1000);
+    });
+
+    async function fetchNowPlaying(initialLoad = false) {
+      try {
+        const response = await fetch('/api/nowPlaying');
+        const nowPlaying = await response.json();
+
+        if (!nowPlaying.is_playing) {
+          handleNoSongPlaying();
+          return;
+        }
+
+        if (nowPlaying.item.id !== currentSongId) {
+          currentSongId = nowPlaying.item.id;
+          await handleSongChange(nowPlaying);
+        }
+
+        if (!isPlaying) {
+          isPlaying = true;
+          await showPlayerContainer();
+        }
+
+      } catch (error) {
+        console.error('Error fetching now playing:', error);
+      }
+    }
+
+    function handleNoSongPlaying() {
+      if (isPlaying) {
+        isPlaying = false;
+        clearTimeout(fadeOutTimeout);
+        fadeOutTimeout = setTimeout(() => {
+          document.getElementById('playerContainer').classList.add('fade-out');
+          setTimeout(() => {
+            document.getElementById('playerContainer').classList.add('hidden');
+            document.getElementById('playerContainer').classList.remove('fade-out');
+          }, 1000);
+        }, 5000);
+      }
+    }
+
+    async function handleSongChange(nowPlaying) {
+      await fadeOutPlayerContainer();
+      updatePlayer(nowPlaying);
+      await fadeInPlayerContainer();
+    }
+
+    function updatePlayer(nowPlaying) {
+      document.getElementById('albumCover').src = nowPlaying.item.album.images[0].url;
+      document.getElementById('scrollingSongName').textContent = nowPlaying.item.name;
+      document.getElementById('scrollingArtistName').textContent = nowPlaying.item.artists.map(artist => artist.name).join(', ');
+    }
+
+    async function showPlayerContainer() {
+      if (!document.getElementById('scrollingSongName').textContent) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      document.getElementById('playerContainer').classList.remove('hidden');
+      document.getElementById('playerContainer').classList.add('fade-in');
+      setTimeout(() => {
+        document.getElementById('playerContainer').classList.remove('fade-in');
+      }, 1000);
+    }
+
+    function fadeOutPlayerContainer() {
+      return new Promise((resolve) => {
+        document.getElementById('playerContainer').classList.add('fade-out');
+        setTimeout(() => {
+          document.getElementById('playerContainer').classList.remove('fade-out');
+          resolve();
+        }, 1000);
+      });
+    }
+
+    function fadeInPlayerContainer() {
+      return new Promise((resolve) => {
+        document.getElementById('playerContainer').classList.add('fade-in');
+        setTimeout(() => {
+          document.getElementById('playerContainer').classList.remove('fade-in');
+          resolve();
+        }, 1000);
+      });
+    }
+  </script>
+</body>
+
+</html>
