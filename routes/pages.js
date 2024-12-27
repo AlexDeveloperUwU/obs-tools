@@ -32,6 +32,22 @@ router.get("/planToday", async (req, res) => {
   }
 });
 
+router.get("/planTomorrow", async (req, res) => {
+  const options = { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" };
+  const tomorrow = new Intl.DateTimeFormat("es-ES", options).format(new Date(Date.now() + 86400000));
+  try {
+    const json = await fetch(`${process.env.URL}/eventDate?date=${tomorrow}`).then((res) => res.json());
+    if (json.length === 0) {
+      res.render("planTomorrow", { plan: "inexistente!" });
+    } else {
+      res.render("planTomorrow", { plan: json[0].description });
+    }
+  } catch (error) {
+    console.error("Error fetching data:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 router.get("/nowPlaying", async (req, res) => {
   req.session.returnTo = "/nowPlaying";
   ensureAuthenticated(req, res, async () => {
