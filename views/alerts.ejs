@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Now Playing</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@tsparticles/confetti@3.0.3/tsparticles.confetti.bundle.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'spotify-green': '#ffffff',
+            'dark-green': 'rgba(51, 51, 51, 0.4)',
+            'green-300': '#ffffff',
+            'green-900/30': '#4d4d4d',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @font-face {
+      font-family: "Agrandir";
+      src: local("Agrandir Regular"), local("Agrandir-Regular"),
+        url("/PPAgrandir-Regular.otf") format("opentype");
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    html {
+      font-family: "Agrandir", sans-serif;
+      color: #ffffff;
+    }
+
+    .player-shadow {
+      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15));
+    }
+
+    .fade-in {
+      animation: fadeIn 1s forwards;
+    }
+
+    .fade-out {
+      animation: fadeOut 1s forwards;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    @keyframes fadeOut {
+      from {
+        opacity: 1;
+      }
+
+      to {
+        opacity: 0;
+      }
+    }
+
+    #alertContainer {
+      right: 0;
+      left: auto;
+      max-width: 480px;
+    }
+  </style>
+  <script>
+    const socket = new WebSocket('ws://127.0.0.1:8080/ws');
+
+    socket.addEventListener('open', function(event) {
+      console.log('Conectado al WebSocket');
+    });
+
+    socket.addEventListener('message', function(event) {
+      const message = JSON.parse(event.data);
+      handleWebSocketMessage(message);
+    });
+
+    socket.addEventListener('close', function(event) {
+      console.log('WebSocket cerrado, reconectando...');
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    });
+
+    function handleWebSocketMessage(message) {
+      switch (message.metadata.message_type) {
+        case 'session_welcome':
+          console.log('Mensaje de bienvenida recibido');
+          // Subscribe to events here
+          break;
+        case 'notification':
+          displayAlert(message.payload.event, message.metadata.subscription_type);
+          break;
+        case 'session_keepalive':
+          console.log('Mensaje de keepalive recibido');
+          break;
+        case 'session_reconnect':
+          console.log('Mensaje de reconexión recibido');
+          socket.close();
+          break;
+        case 'revocation':
+          console.log('Mensaje de revocación recibido');
+          break;
+        default:
+          console.log('Tipo de mensaje desconocido:', message.metadata.message_type);
+      }
+    }
+
+    function displayAlert(event, type) {
+      const alertTitle = document.getElementById('alertTitle');
+      const alertMessage = document.getElementById('alertMessage');
+      const alertIcon = document.getElementById('alertIcon');
+      const alertContainer = document.getElementById('alertContainer');
+
+      switch (type) {
+        case 'channel.follow':
+          alertTitle.textContent = `${event.user_name} te ha seguido!`;
+          alertMessage.textContent = '¡Gracias por seguirme!';
+          alertIcon.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/xarth/404_user_70x70.png';
+          break;
+        case 'channel.subscribe':
+          alertTitle.textContent = `${event.user_name} se ha suscrito!`;
+          alertMessage.textContent = `Nivel: ${getTier(event.tier)}`;
+          alertIcon.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/xarth/404_user_70x70.png';
+          break;
+        case 'channel.subscription.message':
+          alertTitle.textContent = `${event.user_name} se ha resuscrito!`;
+          alertMessage.textContent = `Mensaje: ${removeEmojis(event.message.text, event.message.emotes)}`;
+          alertIcon.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/xarth/404_user_70x70.png';
+          break;
+        case 'channel.subscription.gift':
+          alertTitle.textContent = `${event.user_name} ha regalado una suscripción!`;
+          alertMessage.textContent = `Total de regalos: ${event.total}`;
+          alertIcon.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/xarth/404_user_70x70.png';
+          break;
+        case 'channel.cheer':
+          alertTitle.textContent = `${event.user_name} ha enviado cheers!`;
+          alertMessage.textContent = `Bits: ${event.bits}`;
+          alertIcon.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/xarth/404_user_70x70.png';
+          break;
+        default:
+          alertTitle.textContent = 'Evento desconocido';
+          alertMessage.textContent = 'Ha ocurrido un evento desconocido';
+          alertIcon.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/xarth/404_user_70x70.png';
+      }
+
+      alertContainer.style.width = 'auto';
+      alertContainer.classList.remove('hidden');
+      alertContainer.classList.add('fade-in');
+      setTimeout(() => {
+        alertContainer.classList.remove('fade-in');
+        alertContainer.classList.add('fade-out');
+        setTimeout(() => {
+          alertContainer.classList.add('hidden');
+          alertContainer.classList.remove('fade-out');
+        }, 1000);
+      }, 5000);
+    }
+
+    function removeEmojis(text, emotes) {
+      if (!emotes || emotes.length === 0) return text;
+      emotes.forEach(emote => {
+        const start = emote.begin;
+        const end = emote.end + 1;
+        text = text.slice(0, start) + text.slice(end);
+      });
+      return text;
+    }
+
+    function getTier(tier) {
+      switch (tier) {
+        case '1000':
+          return '1';
+        case '2000':
+          return '2';
+        case '3000':
+          return '3';
+        default:
+          return 'Desconocido';
+      }
+    }
+  </script>
+</head>
+
+<body>
+  <div id="alertContainer" class="fixed right-4 flex flex-col gap-2 hidden">
+    <div class="bg-dark-green rounded-lg p-3 player-shadow">
+      <div class="flex gap-3 items-center justify-between">
+        <div class="flex flex-col justify-center min-w-0 flex-1 text-right">
+          <h1 id="alertTitle" class="text-lg font-bold text-spotify-green leading-tight truncate overflow-hidden">
+            <span id="scrollingAlertTitle"></span>
+          </h1>
+          <p id="alertMessage" class="text-sm text-green-300 opacity-90 truncate overflow-hidden">
+            <span id="scrollingAlertMessage"></span>
+          </p>
+        </div>
+        <div class="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden">
+          <img id="alertIcon" src="" alt="Alert Icon" class="w-full h-full object-cover">
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>

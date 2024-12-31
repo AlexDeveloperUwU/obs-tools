@@ -88,4 +88,8 @@ router.get("/chat", (req, res) => {
   res.render("chat");
 });
 
+router.get("/alerts", (req, res) => {
+  res.render("alerts");
+});
+
 export default router;
