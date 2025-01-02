@@ -72,8 +72,8 @@ await refreshTokensOnStartup();
 const PORT = process.env.PORT || 3000;
 if (process.env.ENV === "production") {
   const options = {
-    key: await fs.readFile(path.join(__dirname, "ssl/key.pem")),
-    cert: await fs.readFile(path.join(__dirname, "ssl/cert.pem")),
+    key: await fs.readFile(path.join(__dirname, "ssl/server.key")),
+    cert: await fs.readFile(path.join(__dirname, "ssl/server.crt")),
   };
   https.createServer(options, app).listen(PORT, () => {
     console.log(`Server is running on https://localhost:${PORT}`);
@@ -83,3 +83,6 @@ if (process.env.ENV === "production") {
     console.log(`Server is running on http://localhost:${PORT}`);
   });
 }
+
+// TODO: Handle HTTPS in production for auth with Spotify and Twitch
+// TODO: Handle HTTP in development for auth with Spotify and Twitch
