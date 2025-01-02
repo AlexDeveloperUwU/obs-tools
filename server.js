@@ -23,7 +23,6 @@ if (result.error) {
 
 //! App creation and configuration
 const app = e();
-const PORT = 3003;
 app.use(e.static(path.join(__dirname, "public")));
 
 // View engine setup
@@ -70,6 +69,7 @@ async function refreshTokensOnStartup() {
 await refreshTokensOnStartup();
 
 //! Initialize the server
+const PORT = process.env.PORT || 3000;
 if (process.env.ENV === "production") {
   const options = {
     key: await fs.readFile(path.join(__dirname, "ssl/key.pem")),
