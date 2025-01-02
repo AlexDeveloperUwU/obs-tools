@@ -88,8 +88,31 @@ router.get("/chat", (req, res) => {
   res.render("chat");
 });
 
-router.get("/alerts", (req, res) => {
-  res.render("alerts");
+router.get("/alerts", async (req, res) => {
+  try {
+    const db = await readDB();
+    const user = db.twitch;
+
+    if (!user) {
+      return res.status(404).send("No hay datos en la base de datos de Twitch.");
+    }
+
+    // Verificar si el token ha expirado
+    if (Date.now() > user.expiresAt) {
+      console.log("El token ha expirado, refrescando...");
+      try {
+        user.accessToken = await refreshAccessToken(user, "twitch");
+      } catch (error) {
+        console.error("Error al refrescar el token de acceso:", error);
+        return res.status(500).send("Error al refrescar el token de acceso.");
+      }
+    }
+
+    res.render("alerts", { user, client_id: process.env.TWITCH_CLIENT_ID });
+  } catch (error) {
+    console.error("Error al acceder a alerts:", error);
+    res.status(500).send("Error al acceder a alerts.");
+  }
 });
 
 export default router;

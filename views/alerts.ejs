@@ -76,7 +76,11 @@
     }
   </style>
   <script>
-    const socket = new WebSocket('ws://127.0.0.1:8080/ws');
+    const env = '<%= process.env.ENV %>';
+    const token = '<%= user.accessToken %>';
+    const socketUrl = env === 'production' ? 'wss://eventsub.wss.twitch.tv/ws' : 'ws://127.0.0.1:8080/ws';
+    const socket = new WebSocket(socketUrl);
+    let sessionId = '';
 
     socket.addEventListener('open', function(event) {
       console.log('Conectado al WebSocket');
@@ -98,7 +102,8 @@
       switch (message.metadata.message_type) {
         case 'session_welcome':
           console.log('Mensaje de bienvenida recibido');
-          // Subscribe to events here
+          sessionId = message.payload.session.id;
+          subscribeToEvents();
           break;
         case 'notification':
           displayAlert(message.payload.event, message.metadata.subscription_type);
@@ -116,6 +121,81 @@
         default:
           console.log('Tipo de mensaje desconocido:', message.metadata.message_type);
       }
+    }
+
+    function subscribeToEvents() {
+      console.log(sessionId);
+      const events = [{
+          type: 'channel.follow',
+          version: '2'
+        },
+        {
+          type: 'channel.cheer',
+          version: '1'
+        },
+        {
+          type: 'channel.subscription.gift',
+          version: '1'
+        },
+        {
+          type: 'channel.subscription.message',
+          version: '1'
+        },
+        {
+          type: 'channel.subscribe',
+          version: '1'
+        }
+      ];
+
+      events.forEach(event => {
+        fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Client-Id': '<%= client_id %>',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              type: event.type,
+              version: event.version,
+              condition: {
+                broadcaster_user_id: '<%= user.id %>',
+                moderator_user_id: '<%= user.id %>'
+              },
+              transport: {
+                method: 'websocket',
+                session_id: sessionId
+              }
+            })
+          })
+          .then(response => response.json())
+          .then(data => {
+            console.log(`Suscripción a ${event.type} creada:`, data);
+            if (event.type === events[events.length - 1].type) {
+              getSubscribedEvents();
+            }
+          })
+          .catch(error => {
+            console.error(`Error al suscribirse a ${event.type}:`, error);
+          });
+      });
+    }
+
+    function getSubscribedEvents() {
+      fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Client-Id': '<%= client_id %>'
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          console.log('Eventos suscritos:', data);
+        })
+        .catch(error => {
+          console.error('Error al obtener eventos suscritos:', error);
+        });
     }
 
     function displayAlert(event, type) {

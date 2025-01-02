@@ -1,6 +1,7 @@
 import e from "express";
 import passport from "passport";
 import { Strategy as SpotifyStrategy } from "passport-spotify";
+import { Strategy as TwitchStrategy } from "passport-twitch-new";
 import path from "path";
 import { configDotenv } from "dotenv";
 import { fileURLToPath } from "url";
@@ -38,28 +39,33 @@ async function writeDB(data) {
   await fs.writeFile(dbFilePath, JSON.stringify(data, null, 2));
 }
 
-// Función para renovar el token
-export async function refreshAccessToken(user) {
+// Función para renovar el token de acceso
+export async function refreshAccessToken(user, platform) {
+  const url = platform === "spotify" ? "https://accounts.spotify.com/api/token" : "https://id.twitch.tv/oauth2/token";
+
+  const params = {
+    grant_type: "refresh_token",
+    refresh_token: user.refreshToken,
+    client_id: platform === "spotify" ? process.env.SPOTIFY_CLIENT_ID : process.env.TWITCH_CLIENT_ID,
+    client_secret: platform === "spotify" ? process.env.SPOTIFY_CLIENT_SECRET : process.env.TWITCH_CLIENT_SECRET,
+  };
+
   try {
-    const response = await axios.post("https://accounts.spotify.com/api/token", null, {
-      params: {
-        grant_type: "refresh_token",
-        refresh_token: user.refreshToken,
-        client_id: process.env.SPOTIFY_CLIENT_ID,
-        client_secret: process.env.SPOTIFY_CLIENT_SECRET,
-      },
+    const response = await axios.post(url, null, {
+      params,
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
       },
     });
 
-    const { access_token, expires_in } = response.data;
+    const { access_token, refresh_token, expires_in } = response.data;
     user.accessToken = access_token;
+    user.refreshToken = refresh_token || user.refreshToken;
     user.expiresAt = Date.now() + expires_in * 1000;
-    await writeDB({ user });
+    await writeDB({ [platform]: user });
     return access_token;
   } catch (error) {
-    console.error("Error refreshing access token:", error);
+    console.error(`Error refreshing ${platform} access token:`, error);
     throw error;
   }
 }
@@ -71,7 +77,7 @@ export async function ensureAuthenticated(req, res, next) {
     const user = db.user;
     if (user && Date.now() > user.expiresAt) {
       try {
-        const newAccessToken = await refreshAccessToken(user);
+        const newAccessToken = await refreshAccessToken(user, "spotify");
         req.user.accessToken = newAccessToken;
       } catch (error) {
         return res.redirect("/auth/spotify");
@@ -99,6 +105,25 @@ passport.use(
   )
 );
 
+// Configurar la estrategia de Twitch
+passport.use(
+  new TwitchStrategy(
+    {
+      clientID: process.env.TWITCH_CLIENT_ID,
+      clientSecret: process.env.TWITCH_CLIENT_SECRET,
+      callbackURL: `${process.env.APP_URL}/auth/twitch/callback`,
+      scope: "user_read",
+    },
+    async function (accessToken, refreshToken, expires_in, profile, done) {
+      const db = await readDB();
+      const expiresAt = Date.now() + expires_in.expires_in * 1000;
+      db.twitch = { id: profile.id, accessToken, refreshToken, expiresAt };
+      await writeDB(db);
+      return done(null, { profile, accessToken, refreshToken, expiresAt });
+    }
+  )
+);
+
 passport.serializeUser((user, done) => {
   done(null, user);
 });
@@ -119,6 +144,17 @@ router.get(
 
 router.get("/spotify/callback", passport.authenticate("spotify", { failureRedirect: "/" }), (req, res) => {
   res.redirect("/nowPlayingSong");
+});
+
+router.get(
+  "/twitch",
+  passport.authenticate("twitch", {
+    scope: ["user_read", "bits:read", "channel:read:subscriptions", "moderator:read:followers"],
+  })
+);
+
+router.get("/twitch/callback", passport.authenticate("twitch", { failureRedirect: "/" }), (req, res) => {
+  res.redirect("/alerts");
 });
 
 export default router;

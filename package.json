@@ -9,7 +9,8 @@
     "express-session": "^1.18.1",
     "lowdb": "^7.0.1",
     "passport": "^0.7.0",
-    "passport-spotify": "^2.0.0"
+    "passport-spotify": "^2.0.0",
+    "passport-twitch-new": "^0.0.3"
   },
   "name": "twitch-tools",
   "type": "module",
