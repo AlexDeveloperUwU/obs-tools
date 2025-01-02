@@ -70,7 +70,7 @@ async function refreshTokensOnStartup() {
 await refreshTokensOnStartup();
 
 //! Initialize the server
-if (process.env.NODE_ENV === "production") {
+if (process.env.ENV === "production") {
   const options = {
     key: await fs.readFile(path.join(__dirname, "ssl/key.pem")),
     cert: await fs.readFile(path.join(__dirname, "ssl/cert.pem")),
