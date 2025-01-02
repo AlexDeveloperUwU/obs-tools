@@ -6,6 +6,10 @@ import { fileURLToPath } from "url";
 import { dirname } from "path";
 import session from "express-session";
 import passport from "passport";
+import { refreshAccessToken } from "./routes/auth.js";
+import fs from "fs/promises";
+import https from "https";
+import http from "http";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -19,7 +23,7 @@ if (result.error) {
 
 //! App creation and configuration
 const app = e();
-const PORT = process.env.PORT || 3000;
+const PORT = 3003;
 app.use(e.static(path.join(__dirname, "public")));
 
 // View engine setup
@@ -45,7 +49,37 @@ app.use("/", pagesRouter);
 app.use("/auth", authRouter);
 app.use("/api", apiRouter);
 
+//! Refresh tokens on startup
+const dbFilePath = path.join(__dirname, "data/db.json");
+
+async function refreshTokensOnStartup() {
+  try {
+    const data = await fs.readFile(dbFilePath, "utf-8");
+    const db = JSON.parse(data);
+    if (db.user) {
+      await refreshAccessToken(db.user, "spotify");
+    }
+    if (db.twitch) {
+      await refreshAccessToken(db.twitch, "twitch");
+    }
+  } catch (error) {
+    console.error("Error refreshing tokens on startup:", error);
+  }
+}
+
+await refreshTokensOnStartup();
+
 //! Initialize the server
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-});
+if (process.env.NODE_ENV === "production") {
+  const options = {
+    key: await fs.readFile(path.join(__dirname, "ssl/key.pem")),
+    cert: await fs.readFile(path.join(__dirname, "ssl/cert.pem")),
+  };
+  https.createServer(options, app).listen(PORT, () => {
+    console.log(`Server is running on https://localhost:${PORT}`);
+  });
+} else {
+  http.createServer(app).listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+  });
+}
