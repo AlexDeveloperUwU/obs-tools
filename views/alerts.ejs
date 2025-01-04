@@ -42,11 +42,13 @@
     }
 
     .fade-in {
-      animation: fadeIn 1s forwards;
+      animation: fadeIn 0.6s forwards;
+      /* Cambiado de 0.5s a 0.6s */
     }
 
     .fade-out {
-      animation: fadeOut 1s forwards;
+      animation: fadeOut 0.6s forwards;
+      /* Cambiado de 0.5s a 0.6s */
     }
 
     @keyframes fadeIn {
@@ -82,6 +84,25 @@
     const socket = new WebSocket(socketUrl);
     let sessionId = '';
 
+    const eventQueue = [];
+    let isProcessingQueue = false;
+
+    function processQueue() {
+      if (eventQueue.length === 0) {
+        isProcessingQueue = false;
+        return;
+      }
+
+      isProcessingQueue = true;
+      const {
+        event,
+        type
+      } = eventQueue.shift();
+      displayAlert(event, type).then(() => {
+        setTimeout(processQueue, 1000);
+      });
+    }
+
     socket.addEventListener('open', function(event) {
       console.log('Conectado al WebSocket');
     });
@@ -106,7 +127,13 @@
           subscribeToEvents();
           break;
         case 'notification':
-          displayAlert(message.payload.event, message.metadata.subscription_type);
+          eventQueue.push({
+            event: message.payload.event,
+            type: message.metadata.subscription_type
+          });
+          if (!isProcessingQueue) {
+            processQueue();
+          }
           break;
         case 'session_keepalive':
           console.log('Mensaje de keepalive recibido');
@@ -199,54 +226,96 @@
     }
 
     function displayAlert(event, type) {
-      const alertTitle = document.getElementById('alertTitle');
-      const alertMessage = document.getElementById('alertMessage');
-      const alertIcon = document.getElementById('alertIcon');
-      const alertContainer = document.getElementById('alertContainer');
+      return new Promise((resolve) => {
+        const alertTitle = document.getElementById('alertTitle');
+        const alertMessage = document.getElementById('alertMessage');
+        const alertIcon = document.getElementById('alertIcon');
+        const alertContainer = document.getElementById('alertContainer');
 
-      switch (type) {
-        case 'channel.follow':
-          alertTitle.textContent = `${event.user_name} te ha seguido!`;
-          alertMessage.textContent = '¡Gracias por seguirme!';
-          alertIcon.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/xarth/404_user_70x70.png';
-          break;
-        case 'channel.subscribe':
-          alertTitle.textContent = `${event.user_name} se ha suscrito!`;
-          alertMessage.textContent = `Nivel: ${getTier(event.tier)}`;
-          alertIcon.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/xarth/404_user_70x70.png';
-          break;
-        case 'channel.subscription.message':
-          alertTitle.textContent = `${event.user_name} se ha resuscrito!`;
-          alertMessage.textContent = `Mensaje: ${removeEmojis(event.message.text, event.message.emotes)}`;
-          alertIcon.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/xarth/404_user_70x70.png';
-          break;
-        case 'channel.subscription.gift':
-          alertTitle.textContent = `${event.user_name} ha regalado una suscripción!`;
-          alertMessage.textContent = `Total de regalos: ${event.total}`;
-          alertIcon.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/xarth/404_user_70x70.png';
-          break;
-        case 'channel.cheer':
-          alertTitle.textContent = `${event.user_name} ha enviado cheers!`;
-          alertMessage.textContent = `Bits: ${event.bits}`;
-          alertIcon.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/xarth/404_user_70x70.png';
-          break;
-        default:
-          alertTitle.textContent = 'Evento desconocido';
-          alertMessage.textContent = 'Ha ocurrido un evento desconocido';
-          alertIcon.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/xarth/404_user_70x70.png';
-      }
+        let alertData = {
+          title: '',
+          message: '',
+          icon: ''
+        };
 
-      alertContainer.style.width = 'auto';
-      alertContainer.classList.remove('hidden');
-      alertContainer.classList.add('fade-in');
-      setTimeout(() => {
-        alertContainer.classList.remove('fade-in');
-        alertContainer.classList.add('fade-out');
-        setTimeout(() => {
-          alertContainer.classList.add('hidden');
-          alertContainer.classList.remove('fade-out');
-        }, 1000);
-      }, 5000);
+        const fetchUserData = async (userId) => {
+          try {
+            const response = await fetch(`https://api.twitch.tv/helix/users?id=${userId}`, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Client-Id': '<%= client_id %>'
+              }
+            });
+            const data = await response.json();
+            return data.data && data.data.length > 0 ? data.data[0].display_name : null;
+          } catch (error) {
+            console.error('Error al obtener datos del usuario:', error);
+            return null;
+          }
+        };
+
+        const setAlertData = async () => {
+          switch (type) {
+            case 'channel.follow':
+              alertData.title = `${event.user_name} me ha dao follow!`;
+              alertData.message = '¡Mil gracias por darme una oportunidad! 💜';
+              alertData.icon = '/follower.png';
+              break;
+            case 'channel.subscribe':
+              if (event.is_gift) {
+                const displayName = await fetchUserData(event.user_id);
+                alertData.title = `A ${event.user_name} le cayó una sub tier ${getTier(event.tier)}!`;
+                alertData.message = displayName ? `Disfruta de la sub y gracias a ${displayName} por ella! 💖` : '¡Gracias por la sub regalo! 💖';
+                alertData.icon = '/sub.png';
+              } else {
+                alertData.title = `${event.user_name} se suscribió con una tier ${getTier(event.tier)}!`;
+                alertData.message = '¡Gracias infinitas por apoyar mi canal y contenido! 💖';
+                alertData.icon = '/sub.png';
+              }
+              break;
+            case 'channel.subscription.message':
+              alertData.title = `${event.user_name} renovó su sub! :D`;
+              alertData.message = `¡Gracias por tu fidelidad! ${removeEmojis(event.message.text, event.message.emotes)}`;
+              alertData.icon = '/sub.png';
+              break;
+            case 'channel.subscription.gift':
+              alertData.title = `${event.user_name} regaló una sub!`;
+              alertData.message = `¡Qué generosidad! Ya regaló ${event.total} suscripciones en total! 💖`;
+              alertData.icon = '/sub.png';
+              break;
+            case 'channel.cheer':
+              alertData.title = `${event.user_name} me envió unos cheers!`;
+              alertData.message = `¡Muchísimas gracias por esos ${event.bits} bitazos! 💎`;
+              alertData.icon = getCheerGif(event.bits);
+              break;
+            default:
+              alertData.title = '¡Oops! Algo inesperado pasó...';
+              alertData.message = 'Algo ha petao, pero ¡gracias por estar aquí! 🙌';
+              alertData.icon = '/unknown.png';
+              break;
+          }
+        };
+
+        setAlertData().then(() => {
+          alertTitle.textContent = alertData.title;
+          alertMessage.textContent = alertData.message;
+          alertIcon.src = alertData.icon;
+
+          alertContainer.style.width = 'auto';
+          alertContainer.classList.remove('hidden');
+          alertContainer.classList.add('fade-in');
+          setTimeout(() => {
+            alertContainer.classList.remove('fade-in');
+            alertContainer.classList.add('fade-out');
+            setTimeout(() => {
+              alertContainer.classList.add('hidden');
+              alertContainer.classList.remove('fade-out');
+              resolve();
+            }, 600);
+          }, 4000);
+        });
+      });
     }
 
     function removeEmojis(text, emotes) {
@@ -269,6 +338,22 @@
           return '3';
         default:
           return 'Desconocido';
+      }
+    }
+
+    function getCheerGif(bits) {
+      if (bits >= 1 && bits < 100) {
+        return '/cheer1.gif';
+      } else if (bits >= 100 && bits < 1000) {
+        return '/cheer100.gif';
+      } else if (bits >= 1000 && bits < 5000) {
+        return '/cheer1000.gif';
+      } else if (bits >= 5000 && bits < 10000) {
+        return '/cheer5000.gif';
+      } else if (bits >= 10000) {
+        return '/cheer10000.gif';
+      } else {
+        return '/cheer1.gif';
       }
     }
   </script>
