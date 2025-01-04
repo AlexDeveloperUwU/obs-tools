@@ -3,18 +3,14 @@ import path from "path";
 import { configDotenv } from "dotenv";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
-import { ensureAuthenticated } from "./auth.js";
-import { readDB, getNowPlaying } from "./api.js"; // Importar funciones necesarias
+import { ensureAuthenticated, refreshAccessToken } from "./auth.js";
+import { readDB, getNowPlaying } from "./api.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const router = e.Router();
 configDotenv({ path: path.resolve(__dirname, "../env/.env") });
-
-//router.get("/", (req, res) => {
-//res.redirect("https://alexdevuwu.com");
-//});
 
 router.get("/planToday", async (req, res) => {
   const options = { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" };
