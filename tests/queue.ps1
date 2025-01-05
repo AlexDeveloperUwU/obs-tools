@@ -1,3 +1,5 @@
+# Estes tests se usan para enviarlos todos seguidos al websocket del Twitch CLI y comprobar si la cola interna de la parte cliente funciona correctamente.
+
 Write-Host "Iniciando eventos de Twitch..."
 
 twitch event trigger channel.follow --transport=websocket

@@ -92,7 +92,6 @@
       <div class="flex justify-between items-center text-green-300 mb-2">
         <div class="flex items-center gap-2">
           <span id="currentTime" class="text-sm font-medium"></span>
-          <i id="playPauseIcon" class="fas fa-play text-spotify-green"></i>
         </div>
         <span id="duration" class="text-sm font-medium"></span>
       </div>
@@ -166,10 +165,6 @@
       document.getElementById('scrollingSongName').textContent = nowPlaying.item.name;
       document.getElementById('scrollingArtistName').textContent = nowPlaying.item.artists.map(artist => artist.name).join(', ');
       updateProgress(nowPlaying);
-
-      const playPauseIcon = document.getElementById('playPauseIcon');
-      playPauseIcon.classList.toggle('fa-play', !nowPlaying.is_playing);
-      playPauseIcon.classList.toggle('fa-pause', nowPlaying.is_playing);
     }
 
     function updateProgress(nowPlaying) {

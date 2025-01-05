@@ -1,3 +1,5 @@
+# Este script envía eventos de Twitch al websocket de Twitch CLI, pero con un pequeño delay entre cada uno de ellos.
+
 Write-Host "Iniciando eventos de Twitch..."
 
 twitch event trigger channel.follow --transport=websocket
