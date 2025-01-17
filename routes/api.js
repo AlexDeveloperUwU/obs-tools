@@ -67,4 +67,41 @@ router.get("/nowPlaying", async (req, res) => {
   }
 });
 
+router.get("/isLive/:channel", async (req, res) => {
+  const { channel } = req.params;
+  try {
+    const db = await readDB();
+    const user = db.twitch;
+
+    if (!user) {
+      return res.status(404).send("No hay datos en la base de datos de Twitch.");
+    }
+
+    if (Date.now() > user.expiresAt) {
+      console.log("El token ha expirado, refrescando...");
+      try {
+        user.accessToken = await refreshAccessToken(user, "twitch");
+      } catch (error) {
+        console.error("Error al refrescar el token de acceso:", error);
+        return res.status(500).send("Error al refrescar el token de acceso.");
+      }
+    }
+
+    const streamResponse = await fetch(`https://api.twitch.tv/helix/streams?user_login=${channel}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${user.accessToken}`,
+        "Client-Id": process.env.TWITCH_CLIENT_ID,
+      },
+    });
+    const streamData = await streamResponse.json();
+    const isLive = streamData.data.length > 0;
+
+    res.json({ isLive });
+  } catch (error) {
+    console.error("Error al verificar si está en directo:", error);
+    res.status(500).send("Error al verificar si está en directo.");
+  }
+});
+
 export default router;

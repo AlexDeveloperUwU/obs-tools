@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Colaboración</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'spotify-green': '#ffffff',
+            'dark-green': 'rgba(51, 51, 51, 0.4)',
+            'green-300': '#ffffff',
+            'green-900/30': '#4d4d4d',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @font-face {
+      font-family: "Agrandir";
+      src: local("Agrandir Regular"), local("Agrandir-Regular"),
+        url("/PPAgrandir-Regular.otf") format("opentype");
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    html {
+      font-family: "Agrandir", sans-serif;
+      color: #ffffff;
+    }
+
+    .card-shadow {
+      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15));
+    }
+
+    .fade-in {
+      animation: fadeIn 1s forwards;
+    }
+
+    .fade-out {
+      animation: fadeOut 1s forwards;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    @keyframes fadeOut {
+      from {
+        opacity: 1;
+      }
+
+      to {
+        opacity: 0;
+      }
+    }
+  </style>
+</head>
+
+<body onload="fadeInContainer()">
+  <div id="collabContainer" class="fixed top-4 <%= direction === 'left' ? 'left-4' : 'right-4' %> flex flex-col gap-2 w-[280px] hidden">
+    <div class="bg-dark-green rounded-lg p-3 card-shadow">
+      <div class="flex gap-3 items-center justify-between">
+        <% if (direction === 'left') { %>
+        <div class="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden">
+          <img id="collabUserAvatar" src="<%= profile_image_url %>" alt="User Avatar" class="w-full h-full object-cover">
+        </div>
+        <div class="flex flex-col justify-center min-w-0 flex-1 text-left">
+          <h1 id="collabUserName" class="text-lg font-bold text-spotify-green leading-tight truncate overflow-hidden">
+            <span id="userName"><%= display_name %></span>
+          </h1>
+          <div id="liveStatus" class="<%= isLive ? '' : 'hidden' %>">
+            <p class="text-sm text-green-300 opacity-90 truncate overflow-hidden">
+              En directo :D! - <span style="color: #9370DB;">ttv/</span><%= login %>
+            </p>
+          </div>
+          <div id="followStatus" class="<%= isLive ? 'hidden' : '' %>">
+            <p class="text-sm text-green-300 opacity-90 truncate overflow-hidden">
+              Síguele :3 - <span style="color: #9370DB;">ttv/</span><%= login %>
+            </p>
+          </div>
+        </div>
+        <% } else { %>
+        <div class="flex flex-col justify-center min-w-0 flex-1 text-right">
+          <h1 id="collabUserName" class="text-lg font-bold text-spotify-green leading-tight truncate overflow-hidden">
+            <span id="userName"><%= display_name %></span>
+          </h1>
+          <div id="liveStatus" class="<%= isLive ? '' : 'hidden' %>">
+            <p class="text-sm text-green-300 opacity-90 truncate overflow-hidden">
+              En directo :D! - <span style="color: #9370DB;">ttv/</span><%= login %>
+            </p>
+          </div>
+          <div id="followStatus" class="<%= isLive ? 'hidden' : '' %>">
+            <p class="text-sm text-green-300 opacity-90 truncate overflow-hidden">
+              Síguele :3 - <span style="color: #9370DB;">ttv/</span><%= login %>
+            </p>
+          </div>
+        </div>
+        <div class="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden">
+          <img id="collabUserAvatar" src="<%= profile_image_url %>" alt="User Avatar" class="w-full h-full object-cover">
+        </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function fadeInContainer() {
+      const container = document.getElementById("collabContainer");
+      container.classList.remove("hidden");
+      container.classList.add("fade-in");
+    }
+
+    async function checkLiveStatus() {
+      try {
+        const response = await fetch(`/api/isLive/<%= login %>`);
+        const data = await response.json();
+        const liveStatus = document.getElementById("liveStatus");
+        const followStatus = document.getElementById("followStatus");
+
+        if (data.isLive) {
+          followStatus.classList.add("hidden");
+          liveStatus.classList.remove("hidden");
+        } else {
+          liveStatus.classList.add("hidden");
+          followStatus.classList.remove("hidden");
+        }
+      } catch (error) {
+        console.error("Error checking live status:", error);
+      }
+    }
+
+    setInterval(checkLiveStatus, 300000);
+  </script>
+</body>
+
+</html>

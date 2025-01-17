@@ -93,7 +93,6 @@ router.get("/alerts", async (req, res) => {
       return res.status(404).send("No hay datos en la base de datos de Twitch.");
     }
 
-    // Verificar si el token ha expirado
     if (Date.now() > user.expiresAt) {
       console.log("El token ha expirado, refrescando...");
       try {
@@ -108,6 +107,53 @@ router.get("/alerts", async (req, res) => {
   } catch (error) {
     console.error("Error al acceder a alerts:", error);
     res.status(500).send("Error al acceder a alerts.");
+  }
+});
+
+router.get("/collab/:direction/:channel", async (req, res) => {
+  const { channel, direction } = req.params;
+  try {
+    const db = await readDB();
+    const user = db.twitch;
+
+    if (!user) {
+      return res.status(404).send("No hay datos en la base de datos de Twitch.");
+    }
+
+    if (Date.now() > user.expiresAt) {
+      console.log("El token ha expirado, refrescando...");
+      try {
+        user.accessToken = await refreshAccessToken(user, "twitch");
+      } catch (error) {
+        console.error("Error al refrescar el token de acceso:", error);
+        return res.status(500).send("Error al refrescar el token de acceso.");
+      }
+    }
+
+    const response = await fetch(`https://api.twitch.tv/helix/users?login=${channel}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${user.accessToken}`,
+        "Client-Id": process.env.TWITCH_CLIENT_ID,
+      },
+    });
+    const data = await response.json();
+    const { display_name, profile_image_url, login } = data.data[0];
+
+    const streamResponse = await fetch(`https://api.twitch.tv/helix/streams?type=live&user_login=${channel}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${user.accessToken}`,
+        "Client-Id": process.env.TWITCH_CLIENT_ID,
+      },
+    });
+    const streamData = await streamResponse.json();
+    const isLive = streamData.data.length > 0;
+
+    res.render("collab", { direction, display_name, profile_image_url, login, isLive });
+  } catch (error) {
+    console.error("Error al acceder a colab:", error);
+    res.status(500).send("Error al acceder a colab.");
   }
 });
 
