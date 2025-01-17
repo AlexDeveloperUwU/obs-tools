@@ -101,8 +101,8 @@ passport.use(
       db.user = { id: profile.id, accessToken, refreshToken, expiresAt: Date.now() + expires_in * 1000 };
       await writeDB(db);
       return done(null, { profile, accessToken, refreshToken });
-    }
-  )
+    },
+  ),
 );
 
 // Configurar la estrategia de Twitch
@@ -120,8 +120,8 @@ passport.use(
       db.twitch = { id: profile.id, accessToken, refreshToken, expiresAt };
       await writeDB(db);
       return done(null, { profile, accessToken, refreshToken, expiresAt });
-    }
-  )
+    },
+  ),
 );
 
 passport.serializeUser((user, done) => {
@@ -139,7 +139,7 @@ router.get(
   "/spotify",
   passport.authenticate("spotify", {
     scope: ["user-read-private", "user-read-email", "user-read-playback-state", "user-read-currently-playing"],
-  })
+  }),
 );
 
 router.get("/spotify/callback", passport.authenticate("spotify", { failureRedirect: "/" }), (req, res) => {
@@ -150,7 +150,7 @@ router.get(
   "/twitch",
   passport.authenticate("twitch", {
     scope: ["user_read", "bits:read", "channel:read:subscriptions", "moderator:read:followers"],
-  })
+  }),
 );
 
 router.get("/twitch/callback", passport.authenticate("twitch", { failureRedirect: "/" }), (req, res) => {
