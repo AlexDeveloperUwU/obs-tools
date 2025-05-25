@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Now Playing</title>
+  <title>Now Playing - Full</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
   <script>
@@ -109,8 +109,10 @@
     let fadeOutTimeout;
     let errorCount = 0;
     const MAX_ERRORS = 5;
+    const VIEW_TYPE = 'full'; // Identificador único para esta vista
 
     document.addEventListener('DOMContentLoaded', () => {
+      console.log('NowPlaying Full view loaded');
       fetchNowPlaying(true);
       setInterval(fetchNowPlaying, 1000);
     });
@@ -123,13 +125,13 @@
           const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
           console.error('Error response:', errorData);
           
-          if (response.status === 401) {
-            console.log('Token inválido, redirigiendo a autenticación');
+          if (response.status === 401 || errorData.requiresAuth) {
+            console.log('Token inválido o reautenticación requerida, redirigiendo a autenticación');
             window.location.href = '/auth/spotify';
             return;
           }
           
-          if (response.status === 404) {
+          if (response.status === 404 && errorData.requiresAuth) {
             console.log('Usuario no encontrado, redirigiendo a autenticación');
             window.location.href = '/auth/spotify';
             return;
@@ -139,18 +141,26 @@
         }
         
         const nowPlaying = await response.json();
-        errorCount = 0; // Reset error count on success
+        errorCount = 0;
 
-        if (!nowPlaying.is_playing) {
+        if (!nowPlaying.is_playing || !nowPlaying.item) {
           handleNoSongPlaying();
+          return;
+        }
+
+        // Verificar que tenemos una canción válida
+        if (!nowPlaying.item.id) {
+          console.warn('Canción sin ID válido');
           return;
         }
 
         if (nowPlaying.item.id !== currentSongId) {
           currentSongId = nowPlaying.item.id;
+          console.log('Cambio de canción detectado:', nowPlaying.item.name);
           await handleSongChange(nowPlaying);
-        } else {
-          updateProgress(nowPlaying);
+        } else if (isPlaying) {
+          // Solo actualizar progreso si ya estamos mostrando una canción
+          updateProgressOnly(nowPlaying);
         }
 
         if (!isPlaying) {
@@ -171,7 +181,9 @@
 
     function handleNoSongPlaying() {
       if (isPlaying) {
+        console.log('No hay canción reproduciéndose');
         isPlaying = false;
+        currentSongId = null;
         clearTimeout(fadeOutTimeout);
         fadeOutTimeout = setTimeout(() => {
           document.getElementById('playerContainer').classList.add('fade-out');
@@ -185,21 +197,47 @@
 
     async function handleSongChange(nowPlaying) {
       await fadeOutPlayerContainer();
-      updatePlayer(nowPlaying);
+      updateFullPlayer(nowPlaying);
       await fadeInPlayerContainer();
     }
 
-    function updatePlayer(nowPlaying) {
-      document.getElementById('albumCover').src = nowPlaying.item.album.images[0].url;
-      document.getElementById('scrollingSongName').textContent = nowPlaying.item.name;
-      document.getElementById('scrollingArtistName').textContent = nowPlaying.item.artists.map(artist => artist.name).join(', ');
-      updateProgress(nowPlaying);
+    function updateFullPlayer(nowPlaying) {
+      // Verificar que los elementos existen antes de actualizarlos
+      const albumCover = document.getElementById('albumCover');
+      const scrollingSongName = document.getElementById('scrollingSongName');
+      const scrollingArtistName = document.getElementById('scrollingArtistName');
+      
+      if (albumCover && nowPlaying.item.album.images[0]) {
+        albumCover.src = nowPlaying.item.album.images[0].url;
+      }
+      
+      if (scrollingSongName) {
+        scrollingSongName.textContent = nowPlaying.item.name;
+      }
+      
+      if (scrollingArtistName) {
+        scrollingArtistName.textContent = nowPlaying.item.artists.map(artist => artist.name).join(', ');
+      }
+      
+      updateProgressOnly(nowPlaying);
     }
 
-    function updateProgress(nowPlaying) {
-      const progressMs = nowPlaying.progress_ms;
-      const duration = nowPlaying.item.duration_ms;
-      document.getElementById('progress').style.width = `${(progressMs / duration) * 100}%`;
+    function updateProgressOnly(nowPlaying) {
+      // Verificar que tenemos los datos necesarios
+      if (!nowPlaying.progress_ms || !nowPlaying.item.duration_ms) {
+        return;
+      }
+
+      const progressElement = document.getElementById('progress');
+      const currentTimeElement = document.getElementById('currentTime');
+      const durationElement = document.getElementById('duration');
+
+      if (progressElement) {
+        const progressMs = nowPlaying.progress_ms;
+        const duration = nowPlaying.item.duration_ms;
+        const percentage = Math.min((progressMs / duration) * 100, 100);
+        progressElement.style.width = `${percentage}%`;
+      }
 
       const formatTime = (ms) => {
         const minutes = Math.floor(ms / 1000 / 60);
@@ -207,27 +245,46 @@
         return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
       };
 
-      document.getElementById('currentTime').textContent = formatTime(progressMs);
-      document.getElementById('duration').textContent = formatTime(duration);
+      if (currentTimeElement) {
+        currentTimeElement.textContent = formatTime(nowPlaying.progress_ms);
+      }
+      
+      if (durationElement) {
+        durationElement.textContent = formatTime(nowPlaying.item.duration_ms);
+      }
     }
 
     async function showPlayerContainer() {
-      if (!document.getElementById('scrollingSongName').textContent) {
+      const playerContainer = document.getElementById('playerContainer');
+      const scrollingSongName = document.getElementById('scrollingSongName');
+      
+      if (!playerContainer || !scrollingSongName) {
+        return;
+      }
+
+      // Esperar a que el contenido esté listo
+      if (!scrollingSongName.textContent) {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
 
-      document.getElementById('playerContainer').classList.remove('hidden');
-      document.getElementById('playerContainer').classList.add('fade-in');
+      playerContainer.classList.remove('hidden');
+      playerContainer.classList.add('fade-in');
       setTimeout(() => {
-        document.getElementById('playerContainer').classList.remove('fade-in');
+        playerContainer.classList.remove('fade-in');
       }, 1000);
     }
 
     function fadeOutPlayerContainer() {
       return new Promise((resolve) => {
-        document.getElementById('playerContainer').classList.add('fade-out');
+        const playerContainer = document.getElementById('playerContainer');
+        if (!playerContainer) {
+          resolve();
+          return;
+        }
+        
+        playerContainer.classList.add('fade-out');
         setTimeout(() => {
-          document.getElementById('playerContainer').classList.remove('fade-out');
+          playerContainer.classList.remove('fade-out');
           resolve();
         }, 1000);
       });
@@ -235,9 +292,15 @@
 
     function fadeInPlayerContainer() {
       return new Promise((resolve) => {
-        document.getElementById('playerContainer').classList.add('fade-in');
+        const playerContainer = document.getElementById('playerContainer');
+        if (!playerContainer) {
+          resolve();
+          return;
+        }
+        
+        playerContainer.classList.add('fade-in');
         setTimeout(() => {
-          document.getElementById('playerContainer').classList.remove('fade-in');
+          playerContainer.classList.remove('fade-in');
           resolve();
         }, 1000);
       });

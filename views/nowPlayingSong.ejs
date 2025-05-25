@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Now Playing</title>
+  <title>Now Playing - Song Only</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
   <script>
@@ -95,8 +95,10 @@
     let fadeOutTimeout;
     let errorCount = 0;
     const MAX_ERRORS = 5;
+    const VIEW_TYPE = 'simple'; // Identificador único para esta vista
 
     document.addEventListener('DOMContentLoaded', () => {
+      console.log('NowPlaying Simple view loaded');
       fetchNowPlaying(true);
       setInterval(fetchNowPlaying, 1000);
     });
@@ -125,15 +127,22 @@
         }
         
         const nowPlaying = await response.json();
-        errorCount = 0; // Reset error count on success
+        errorCount = 0;
 
-        if (!nowPlaying.is_playing) {
+        if (!nowPlaying.is_playing || !nowPlaying.item) {
           handleNoSongPlaying();
+          return;
+        }
+
+        // Verificar que tenemos una canción válida
+        if (!nowPlaying.item.id) {
+          console.warn('Canción sin ID válido');
           return;
         }
 
         if (nowPlaying.item.id !== currentSongId) {
           currentSongId = nowPlaying.item.id;
+          console.log('Cambio de canción detectado (simple):', nowPlaying.item.name);
           await handleSongChange(nowPlaying);
         }
 
@@ -155,47 +164,79 @@
 
     function handleNoSongPlaying() {
       if (isPlaying) {
+        console.log('No hay canción reproduciéndose (simple)');
         isPlaying = false;
+        currentSongId = null;
         clearTimeout(fadeOutTimeout);
         fadeOutTimeout = setTimeout(() => {
-          document.getElementById('playerContainer').classList.add('fade-out');
-          setTimeout(() => {
-            document.getElementById('playerContainer').classList.add('hidden');
-            document.getElementById('playerContainer').classList.remove('fade-out');
-          }, 1000);
+          const playerContainer = document.getElementById('playerContainer');
+          if (playerContainer) {
+            playerContainer.classList.add('fade-out');
+            setTimeout(() => {
+              playerContainer.classList.add('hidden');
+              playerContainer.classList.remove('fade-out');
+            }, 1000);
+          }
         }, 5000);
       }
     }
 
     async function handleSongChange(nowPlaying) {
       await fadeOutPlayerContainer();
-      updatePlayer(nowPlaying);
+      updateSimplePlayer(nowPlaying);
       await fadeInPlayerContainer();
     }
 
-    function updatePlayer(nowPlaying) {
-      document.getElementById('albumCover').src = nowPlaying.item.album.images[0].url;
-      document.getElementById('scrollingSongName').textContent = nowPlaying.item.name;
-      document.getElementById('scrollingArtistName').textContent = nowPlaying.item.artists.map(artist => artist.name).join(', ');
+    function updateSimplePlayer(nowPlaying) {
+      // Solo actualizar información de la canción, sin progreso
+      const albumCover = document.getElementById('albumCover');
+      const scrollingSongName = document.getElementById('scrollingSongName');
+      const scrollingArtistName = document.getElementById('scrollingArtistName');
+      
+      if (albumCover && nowPlaying.item.album.images[0]) {
+        albumCover.src = nowPlaying.item.album.images[0].url;
+      }
+      
+      if (scrollingSongName) {
+        scrollingSongName.textContent = nowPlaying.item.name;
+      }
+      
+      if (scrollingArtistName) {
+        scrollingArtistName.textContent = nowPlaying.item.artists.map(artist => artist.name).join(', ');
+      }
     }
 
     async function showPlayerContainer() {
-      if (!document.getElementById('scrollingSongName').textContent) {
+      const playerContainer = document.getElementById('playerContainer');
+      const scrollingSongName = document.getElementById('scrollingSongName');
+      
+      if (!playerContainer || !scrollingSongName) {
+        return;
+      }
+
+      // Esperar a que el contenido esté listo
+      if (!scrollingSongName.textContent) {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
 
-      document.getElementById('playerContainer').classList.remove('hidden');
-      document.getElementById('playerContainer').classList.add('fade-in');
+      playerContainer.classList.remove('hidden');
+      playerContainer.classList.add('fade-in');
       setTimeout(() => {
-        document.getElementById('playerContainer').classList.remove('fade-in');
+        playerContainer.classList.remove('fade-in');
       }, 1000);
     }
 
     function fadeOutPlayerContainer() {
       return new Promise((resolve) => {
-        document.getElementById('playerContainer').classList.add('fade-out');
+        const playerContainer = document.getElementById('playerContainer');
+        if (!playerContainer) {
+          resolve();
+          return;
+        }
+        
+        playerContainer.classList.add('fade-out');
         setTimeout(() => {
-          document.getElementById('playerContainer').classList.remove('fade-out');
+          playerContainer.classList.remove('fade-out');
           resolve();
         }, 1000);
       });
@@ -203,9 +244,15 @@
 
     function fadeInPlayerContainer() {
       return new Promise((resolve) => {
-        document.getElementById('playerContainer').classList.add('fade-in');
+        const playerContainer = document.getElementById('playerContainer');
+        if (!playerContainer) {
+          resolve();
+          return;
+        }
+        
+        playerContainer.classList.add('fade-in');
         setTimeout(() => {
-          document.getElementById('playerContainer').classList.remove('fade-in');
+          playerContainer.classList.remove('fade-in');
           resolve();
         }, 1000);
       });
