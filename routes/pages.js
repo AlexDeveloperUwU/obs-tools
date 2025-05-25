@@ -50,14 +50,25 @@ router.get("/nowPlaying", async (req, res) => {
     try {
       const db = await readDB();
       const user = db.user;
+      
       if (!user) {
-        return res.status(404).send("User not found");
+        console.error("Usuario no encontrado en /nowPlaying");
+        return res.status(404).render("error", { 
+          error: "Usuario no encontrado. Por favor, autentícate con Spotify." 
+        });
       }
+      
+      console.log("Cargando nowPlaying para usuario:", user.id);
       const nowPlaying = await getNowPlaying(user.accessToken);
       res.render("nowPlaying", { nowPlaying });
     } catch (error) {
-      console.error("Error fetching now playing:", error);
-      res.status(500).send("Error fetching now playing");
+      console.error("Error fetching now playing en página:", error);
+      if (error.message === "INVALID_TOKEN") {
+        return res.redirect("/auth/spotify");
+      }
+      res.status(500).render("error", { 
+        error: "Error al obtener información de Spotify" 
+      });
     }
   });
 });
@@ -68,14 +79,25 @@ router.get("/nowPlayingSong", async (req, res) => {
     try {
       const db = await readDB();
       const user = db.user;
+      
       if (!user) {
-        return res.status(404).send("User not found");
+        console.error("Usuario no encontrado en /nowPlayingSong");
+        return res.status(404).render("error", { 
+          error: "Usuario no encontrado. Por favor, autentícate con Spotify." 
+        });
       }
+      
+      console.log("Cargando nowPlayingSong para usuario:", user.id);
       const nowPlaying = await getNowPlaying(user.accessToken);
       res.render("nowPlayingSong", { nowPlaying });
     } catch (error) {
-      console.error("Error fetching now playing:", error);
-      res.status(500).send("Error fetching now playing");
+      console.error("Error fetching now playing song en página:", error);
+      if (error.message === "INVALID_TOKEN") {
+        return res.redirect("/auth/spotify");
+      }
+      res.status(500).render("error", { 
+        error: "Error al obtener información de Spotify" 
+      });
     }
   });
 });
@@ -90,15 +112,22 @@ router.get("/alerts", async (req, res) => {
     const user = db.twitch;
 
     if (!user) {
-      return res.status(404).send("No hay datos en la base de datos de Twitch.");
+      console.log("No hay usuario de Twitch, redirigiendo a auth");
+      return res.redirect("/auth/twitch");
     }
 
     if (Date.now() > user.expiresAt) {
-      console.log("El token ha expirado, refrescando...");
+      console.log("El token de Twitch ha expirado, refrescando...");
       try {
         user.accessToken = await refreshAccessToken(user, "twitch");
       } catch (error) {
-        console.error("Error al refrescar el token de acceso:", error);
+        console.error("Error al refrescar el token de Twitch:", error);
+        
+        if (error.message === "INVALID_REFRESH_TOKEN") {
+          console.log("Refresh token inválido, redirigiendo a reautenticación");
+          return res.redirect("/auth/twitch");
+        }
+        
         return res.status(500).send("Error al refrescar el token de acceso.");
       }
     }
@@ -117,15 +146,22 @@ router.get("/collab/:direction/:channel", async (req, res) => {
     const user = db.twitch;
 
     if (!user) {
-      return res.status(404).send("No hay datos en la base de datos de Twitch.");
+      console.log("No hay usuario de Twitch para collab, redirigiendo a auth");
+      return res.redirect("/auth/twitch");
     }
 
     if (Date.now() > user.expiresAt) {
-      console.log("El token ha expirado, refrescando...");
+      console.log("El token de Twitch ha expirado, refrescando...");
       try {
         user.accessToken = await refreshAccessToken(user, "twitch");
       } catch (error) {
-        console.error("Error al refrescar el token de acceso:", error);
+        console.error("Error al refrescar el token de Twitch:", error);
+        
+        if (error.message === "INVALID_REFRESH_TOKEN") {
+          console.log("Refresh token inválido, redirigiendo a reautenticación");
+          return res.redirect("/auth/twitch");
+        }
+        
         return res.status(500).send("Error al refrescar el token de acceso.");
       }
     }
@@ -137,6 +173,18 @@ router.get("/collab/:direction/:channel", async (req, res) => {
         "Client-Id": process.env.TWITCH_CLIENT_ID,
       },
     });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Error obteniendo usuario de Twitch:", response.status, errorText);
+      
+      if (response.status === 401) {
+        return res.redirect("/auth/twitch");
+      }
+      
+      throw new Error(`Twitch API error: ${response.status}`);
+    }
+
     const data = await response.json();
     const { display_name, profile_image_url, login } = data.data[0];
 
@@ -147,6 +195,11 @@ router.get("/collab/:direction/:channel", async (req, res) => {
         "Client-Id": process.env.TWITCH_CLIENT_ID,
       },
     });
+
+    if (!streamResponse.ok) {
+      console.error("Error verificando stream de Twitch:", streamResponse.status);
+    }
+
     const streamData = await streamResponse.json();
     const isLive = streamData.data.length > 0;
 

@@ -36,11 +36,22 @@ async function readDB() {
 
 // Escribir en la base de datos
 async function writeDB(data) {
+  console.log("Escribiendo en DB:", JSON.stringify(data, null, 2));
   await fs.writeFile(dbFilePath, JSON.stringify(data, null, 2));
 }
 
 // Función para renovar el token de acceso
 export async function refreshAccessToken(user, platform) {
+  if (!platform) {
+    console.error("Platform no especificada en refreshAccessToken");
+    throw new Error("Platform is required");
+  }
+
+  if (!user || !user.refreshToken) {
+    console.error(`Usuario o refresh token no válido para ${platform}:`, { hasUser: !!user, hasRefreshToken: !!user?.refreshToken });
+    throw new Error("Invalid user or refresh token");
+  }
+
   const url = platform === "spotify" ? "https://accounts.spotify.com/api/token" : "https://id.twitch.tv/oauth2/token";
 
   const params = {
@@ -51,6 +62,7 @@ export async function refreshAccessToken(user, platform) {
   };
 
   try {
+    console.log(`Renovando token de ${platform} para usuario:`, user.id);
     const response = await axios.post(url, null, {
       params,
       headers: {
@@ -62,30 +74,74 @@ export async function refreshAccessToken(user, platform) {
     user.accessToken = access_token;
     user.refreshToken = refresh_token || user.refreshToken;
     user.expiresAt = Date.now() + expires_in * 1000;
-    await writeDB({ [platform]: user });
+    
+    // Actualizar la base de datos completa
+    const db = await readDB();
+    if (platform === "spotify") {
+      db.user = user;
+    } else {
+      db[platform] = user;
+    }
+    await writeDB(db);
+    
+    console.log(`Token de ${platform} renovado exitosamente`);
     return access_token;
   } catch (error) {
-    console.error(`Error refreshing ${platform} access token:`, error);
+    console.error(`Error refreshing ${platform} access token:`, error.response?.data || error.message);
+    
+    // Manejo específico de errores
+    if (error.response?.status === 400) {
+      const errorData = error.response.data;
+      if (errorData.message === "Invalid refresh token" || errorData.error === "invalid_grant") {
+        console.log(`Refresh token inválido para ${platform}, requiere reautenticación`);
+        
+        // Limpiar tokens inválidos de la base de datos
+        const db = await readDB();
+        if (platform === "spotify") {
+          db.user = null;
+        } else {
+          delete db[platform];
+        }
+        await writeDB(db);
+        
+        throw new Error("INVALID_REFRESH_TOKEN");
+      }
+    }
+    
     throw error;
   }
 }
 
 // Middleware para verificar y renovar el token si es necesario
 export async function ensureAuthenticated(req, res, next) {
-  if (req.isAuthenticated()) {
-    const db = await readDB();
-    const user = db.user;
-    if (user && Date.now() > user.expiresAt) {
-      try {
-        const newAccessToken = await refreshAccessToken(user, "spotify");
-        req.user.accessToken = newAccessToken;
-      } catch (error) {
+  try {
+    if (req.isAuthenticated()) {
+      const db = await readDB();
+      const user = db.user;
+      
+      if (!user) {
+        console.log("Usuario no encontrado en sesión, redirigiendo a auth");
         return res.redirect("/auth/spotify");
       }
+      
+      if (user && Date.now() > user.expiresAt) {
+        try {
+          console.log("Token expirado, renovando en middleware");
+          const newAccessToken = await refreshAccessToken(user, "spotify");
+          req.user.accessToken = newAccessToken;
+        } catch (error) {
+          console.error("Error renovando token en middleware:", error);
+          return res.redirect("/auth/spotify");
+        }
+      }
+      return next();
     }
-    return next();
+    console.log("Usuario no autenticado, redirigiendo a auth");
+    res.redirect("/auth/spotify");
+  } catch (error) {
+    console.error("Error en ensureAuthenticated:", error);
+    res.redirect("/auth/spotify");
   }
-  res.redirect("/auth/spotify");
 }
 
 // Configurar la estrategia de Spotify
@@ -97,10 +153,24 @@ passport.use(
       callbackURL: `${process.env.APP_URL}/auth/spotify/callback`,
     },
     async function (accessToken, refreshToken, expires_in, profile, done) {
-      const db = await readDB();
-      db.user = { id: profile.id, accessToken, refreshToken, expiresAt: Date.now() + expires_in * 1000 };
-      await writeDB(db);
-      return done(null, { profile, accessToken, refreshToken });
+      try {
+        console.log("Autenticando usuario de Spotify:", profile.id);
+        const db = await readDB();
+        db.user = { 
+          id: profile.id, 
+          accessToken, 
+          refreshToken, 
+          expiresAt: Date.now() + expires_in * 1000,
+          displayName: profile.displayName,
+          email: profile.emails?.[0]?.value
+        };
+        await writeDB(db);
+        console.log("Usuario de Spotify guardado en DB");
+        return done(null, { profile, accessToken, refreshToken });
+      } catch (error) {
+        console.error("Error guardando usuario de Spotify:", error);
+        return done(error, null);
+      }
     },
   ),
 );

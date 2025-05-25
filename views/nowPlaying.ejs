@@ -107,6 +107,8 @@
     let currentSongId = null;
     let isPlaying = false;
     let fadeOutTimeout;
+    let errorCount = 0;
+    const MAX_ERRORS = 5;
 
     document.addEventListener('DOMContentLoaded', () => {
       fetchNowPlaying(true);
@@ -116,7 +118,28 @@
     async function fetchNowPlaying(initialLoad = false) {
       try {
         const response = await fetch('/api/nowPlaying');
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          console.error('Error response:', errorData);
+          
+          if (response.status === 401) {
+            console.log('Token inválido, redirigiendo a autenticación');
+            window.location.href = '/auth/spotify';
+            return;
+          }
+          
+          if (response.status === 404) {
+            console.log('Usuario no encontrado, redirigiendo a autenticación');
+            window.location.href = '/auth/spotify';
+            return;
+          }
+          
+          throw new Error(`HTTP ${response.status}: ${errorData.message || 'Error desconocido'}`);
+        }
+        
         const nowPlaying = await response.json();
+        errorCount = 0; // Reset error count on success
 
         if (!nowPlaying.is_playing) {
           handleNoSongPlaying();
@@ -137,6 +160,12 @@
 
       } catch (error) {
         console.error('Error fetching now playing:', error);
+        errorCount++;
+        
+        if (errorCount >= MAX_ERRORS) {
+          console.error('Demasiados errores consecutivos, redirigiendo a autenticación');
+          window.location.href = '/auth/spotify';
+        }
       }
     }
 
